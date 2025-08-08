@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "787443809238",
+    "project_id": "otibook-257bc",
+    "storage_bucket": "otibook-257bc.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:787443809238:android:dd7c6322ed99db6a288277",
+        "android_client_info": {
+          "package_name": "com.example.myapp"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCHCEOrrGeE_zUCh-NFRPq78hsi1UNwp0c"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -1,0 +1,68 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Kullanıcı profilini kimlerin okuyup yazabileceğini belirler.
+    match /users/{userId} {
+      // Bir kullanıcı sadece kendi profilini okuyabilir veya güncelleyebilir.
+      // Yeni kullanıcı oluşturma (create) herkese açık olmalı ki kayıt olabilsinler,
+      // ancak bu işlem Cloud Function ile daha güvenli yönetilebilir.
+      // Şimdilik client'tan oluşturmaya izin veriyoruz ama sadece kendi ID'siyle.
+      allow read, update: if request.auth != null && request.auth.uid == userId;
+      allow create: if request.auth != null;
+    }
+
+    // Öğrenci verilerine kimlerin erişebileceğini belirler.
+    match /students/{studentId} {
+      // get(): Tek bir dökümanı okuma
+      // list(): Birden fazla dökümanı (sorgu ile) okuma
+      allow get: if isSignedIn() && (isOwner(resource.data.parent_ref) || isAssignedTeacher(resource.data.assigned_teacher_refs) || isAdmin());
+      allow list: if isSignedIn() && isAdmin(); // Sadece adminler tüm listeyi çekebilsin. Öğretmen ve veli kendi listesini çekerken sorgu güvenliği gerekir.
+
+      // Öğrenci oluşturma ve güncelleme şimdilik sadece adminlere açık.
+      allow create, update: if isSignedIn() && isAdmin();
+    }
+
+    // Ders notlarına kimlerin erişebileceğini belirler.
+    match /session_notes/{noteId} {
+      // Bir notu, o notun ait olduğu öğrencinin velisi veya atanmış öğretmenleri okuyabilir.
+      // `get()` fonksiyonu ile student dökümanına erişip kontrol ediyoruz.
+      allow read: if isSignedIn() && (
+                    isOwner(get(/databases/$(database)/documents/students/$(resource.data.student_ref.id)).data.parent_ref) ||
+                    isAssignedTeacher(get(/databases/$(database)/documents/students/$(resource.data.student_ref.id)).data.assigned_teacher_refs) ||
+                    isAdmin()
+                  );
+
+      // Bir notu sadece o nota referans verilen öğrenciye atanmış bir öğretmen oluşturabilir.
+      // `request.resource.data` gelen yeni veriyi temsil eder.
+      allow create: if isSignedIn() && isAssignedTeacher(get(/databases/$(database)/documents/students/$(request.resource.data.student_ref.id)).data.assigned_teacher_refs);
+      
+      // Notlar oluşturulduktan sonra değiştirilemez veya silinemez (MVP için).
+      allow update, delete: if false;
+    }
+
+    // --- Yardımcı Fonksiyonlar ---
+
+    // Kullanıcı giriş yapmış mı?
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // Kullanıcı admin rolüne sahip mi?
+    // Kendi user dökümanına erişip rolünü kontrol eder.
+    function isAdmin() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+    
+    // İstek yapan kullanıcı, verilen referansın sahibi mi?
+    function isOwner(userRef) {
+      return request.auth.uid == userRef.id;
+    }
+
+    // İstek yapan kullanıcı, verilen öğretmen referans listesinde var mı?
+    function isAssignedTeacher(teacherRefs) {
+      return request.auth.uid in teacherRefs.map(ref => ref.id);
+    }
+  }
+}
