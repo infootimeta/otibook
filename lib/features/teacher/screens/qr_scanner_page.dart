@@ -1,6 +1,5 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:qr_code_scanner/qr_code_scanner.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
 
 class QRScannerPage extends StatefulWidget {
   const QRScannerPage({super.key});
@@ -10,26 +9,43 @@ class QRScannerPage extends StatefulWidget {
 }
 
 class _QRScannerPageState extends State<QRScannerPage> {
-  final GlobalKey qrKey = GlobalKey(debugLabel: 'QR');
-  QRViewController? controller;
+  final MobileScannerController _controller = MobileScannerController();
+  bool _handled = false;
 
-  // Platforma göre kamerayı yeniden başlatmak için
   @override
   void reassemble() {
     super.reassemble();
-    if (Platform.isAndroid) {
-      controller!.pauseCamera();
-    }
-    controller!.resumeCamera();
+    // hot-reload için güvenli yeniden başlat
+    _controller.stop();
+    _controller.start();
   }
 
   @override
   Widget build(BuildContext context) {
+    final scanArea = (MediaQuery.of(context).size.width < 400 ||
+            MediaQuery.of(context).size.height < 400)
+        ? 250.0
+        : 300.0;
+
     return Scaffold(
       body: Stack(
         alignment: Alignment.center,
-        children: <Widget>[
-          _buildQrView(context),
+        children: [
+          MobileScanner(
+            controller: _controller,
+            onDetect: (capture) async {
+              if (_handled) return;
+              final codes = capture.barcodes;
+              final value = codes.isNotEmpty ? (codes.first.rawValue ?? '') : '';
+              if (value.isEmpty) return;
+
+              _handled = true;
+              final navigator = Navigator.of(context); // context’i await öncesi al
+              await _controller.stop();
+              if (!mounted) return;
+              navigator.pop(value);
+            },
+          ),
           Positioned(
             top: 40,
             left: 10,
@@ -38,7 +54,7 @@ class _QRScannerPageState extends State<QRScannerPage> {
               onPressed: () => Navigator.of(context).pop(),
             ),
           ),
-           Positioned(
+          Positioned(
             bottom: 100,
             child: Container(
               padding: const EdgeInsets.all(12),
@@ -51,56 +67,61 @@ class _QRScannerPageState extends State<QRScannerPage> {
                 style: TextStyle(color: Colors.white),
               ),
             ),
-          )
+          ),
+          IgnorePointer(
+            child: _ScannerOverlay(
+              cutOutSize: scanArea,
+              borderColor: Theme.of(context).primaryColor,
+            ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildQrView(BuildContext context) {
-    // Tarama alanının boyutunu ayarla
-    var scanArea = (MediaQuery.of(context).size.width < 400 ||
-            MediaQuery.of(context).size.height < 400)
-        ? 250.0
-        : 300.0;
-    return QRView(
-      key: qrKey,
-      onQRViewCreated: _onQRViewCreated,
-      overlay: QrScannerOverlayShape(
-        borderColor: Theme.of(context).primaryColor,
-        borderRadius: 10,
-        borderLength: 30,
-        borderWidth: 10,
-        cutOutSize: scanArea,
-      ),
-      onPermissionSet: (ctrl, p) => _onPermissionSet(context, ctrl, p),
-    );
-  }
-
-  void _onQRViewCreated(QRViewController controller) {
-    setState(() {
-      this.controller = controller;
-    });
-    controller.scannedDataStream.listen((scanData) {
-      // Bir kod okunduğunda stream'i durdur, kamerayı duraklat ve geri dön.
-      this.controller?.pauseCamera();
-      if (mounted && scanData.code != null) {
-        Navigator.of(context).pop(scanData.code);
-      }
-    });
-  }
-
-  void _onPermissionSet(BuildContext context, QRViewController ctrl, bool p) {
-    if (!p) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Kamera izni verilmedi!')),
-      );
-    }
-  }
-
   @override
   void dispose() {
-    controller?.dispose();
+    _controller.dispose();
     super.dispose();
+  }
+}
+
+class _ScannerOverlay extends StatelessWidget {
+  const _ScannerOverlay({
+    required this.cutOutSize,
+    this.borderColor = Colors.white,
+    this.borderWidth = 4,
+  });
+
+  final double cutOutSize;
+  final Color borderColor;
+  final double borderWidth;
+  final double borderRadius;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(builder: (context, c) {
+      final w = c.maxWidth;
+      final h = c.maxHeight;
+      final left = (w - cutOutSize) / 2;
+      final top = (h - cutOutSize) / 2;
+
+      return Stack(children: [
+        Container(color: Colors.black45),
+        Positioned(
+          left: left,
+          top: top,
+          width: cutOutSize,
+          height: cutOutSize,
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.transparent,
+              borderRadius: BorderRadius.circular(borderRadius),
+              border: Border.all(color: borderColor, width: borderWidth),
+            ),
+          ),
+        ),
+      ]);
+    });
   }
 }

@@ -5,8 +5,11 @@ import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import 'package:record/record.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:otibook/core/services/firestore_service.dart';
 import 'package:otibook/core/services/storage_service.dart';
+import 'package:uuid/uuid.dart';
+import 'package:otibook/models/session_note_model.dart';
 import 'package:otibook/features/auth/providers/auth_provider.dart';
 
 class AddNotePage extends StatefulWidget {
@@ -105,11 +108,15 @@ class _AddNotePageState extends State<AddNotePage> {
       }
 
       await _firestoreService.addSessionNote(
-        studentId: widget.studentId,
-        teacherId: teacherId,
-        noteText: _noteController.text.trim(),
-        mediaUrl: imageUrl,
-        audioUrl: audioUrl,
+        widget.studentId,
+        SessionNoteModel(
+          id: const Uuid().v4(), // Generate a unique ID for the note
+          noteText: _noteController.text.trim(),
+          mediaUrl: imageUrl,
+          audioUrl: audioUrl,
+          createdAt: Timestamp.now(),
+          studentRef: _firestoreService.getStudentDocumentRef(widget.studentId),
+          teacherRef: _firestoreService.getUserDocRef(teacherId),
       );
 
       if (mounted) {

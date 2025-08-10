@@ -22,7 +22,7 @@ void main() {
     await Firebase.initializeApp();
 
     // Uygulamanızın ana widget'ı olan otibookApp'i oluşturup bir frame tetikliyoruz.
-    await tester.pumpWidget(const otibookApp());
+    await tester.pumpWidget(const OtibookApp());
 
     // Uygulamanın başlığının (title) görünür olduğunu doğruluyoruz.
     // 'otibook - Dijital Gelişim Defteri' metninin widget ağacında bulunup bulunmadığını kontrol ediyoruz.

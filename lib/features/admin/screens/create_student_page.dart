@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:otibook/core/services/firestore_service.dart';
+import 'package:otibook/models/student_model.dart';
+import 'package:uuid/uuid.dart';
 
 class CreateStudentPage extends StatefulWidget {
   const CreateStudentPage({super.key});
@@ -21,24 +23,30 @@ class _CreateStudentPageState extends State<CreateStudentPage> {
       setState(() => _isLoading = true);
 
       try {
-        final parentRef = await _firestoreService.findParentByEmail(_parentEmailController.text.trim());
+        final parent = await _firestoreService
+            .findParentByEmail(_parentEmailController.text.trim());
 
-        if (parentRef == null) {
-          throw Exception(" 'Veli' rolüne sahip bu e-posta ile bir kullanıcı bulunamadı.");
+        if (parent == null) {
+          throw Exception(
+              "A user with this email with the 'Parent' role was not found.");
         }
 
-        await _firestoreService.createStudent(
+        final student = StudentModel(
+          id: const Uuid().v4(),
           nameSurname: _nameController.text.trim(),
-          parentRef: parentRef,
+          // parentRef: FirebaseFirestore.instance.collection('users').doc(parent.uid), // Removed as per StudentModel
+          assignedTeacherRefs: [],
+          // createdAt: Timestamp.now(), // Removed as per StudentModel
         );
+
+        await _firestoreService.addStudent(student);
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Öğrenci başarıyla oluşturuldu!')),
+            const SnackBar(content: Text('Student created successfully!')),
           );
           context.pop();
         }
-
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -60,7 +68,7 @@ class _CreateStudentPageState extends State<CreateStudentPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Yeni Öğrenci Oluştur'),
+        title: const Text('Create New Student'),
       ),
       body: Center(
         child: SingleChildScrollView(
@@ -71,20 +79,23 @@ class _CreateStudentPageState extends State<CreateStudentPage> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Text(
-                  'Yeni Öğrenci Oluştur',
-                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
+                  'Create New Student',
+                  style: Theme.of(context)
+                      .textTheme
+                      .headlineMedium
+                      ?.copyWith(fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 32),
                 TextFormField(
                   controller: _nameController,
                   decoration: const InputDecoration(
-                    labelText: 'Öğrencinin Adı ve Soyadı',
+                    labelText: 'Student\'s Name and Surname',
                     border: OutlineInputBorder(),
                     prefixIcon: Icon(Icons.person_outline),
                   ),
                   validator: (value) {
                     if (value == null || value.trim().isEmpty) {
-                      return 'Lütfen öğrencinin adını ve soyadını girin.';
+                      return 'Please enter the student\'s name and surname.';
                     }
                     return null;
                   },
@@ -93,15 +104,15 @@ class _CreateStudentPageState extends State<CreateStudentPage> {
                 TextFormField(
                   controller: _parentEmailController,
                   decoration: const InputDecoration(
-                    labelText: "Veli'nin E-posta Adresi",
-                    hintText: "Sisteme kayıtlı veli e-postası",
+                    labelText: "Parent's E-mail Address",
+                    hintText: "Parent e-mail registered in the system",
                     border: OutlineInputBorder(),
                     prefixIcon: Icon(Icons.email_outlined),
                   ),
                   keyboardType: TextInputType.emailAddress,
                   validator: (value) {
                     if (value == null || !value.contains('@')) {
-                      return 'Lütfen geçerli bir e-posta adresi girin.';
+                      return 'Please enter a valid email address.';
                     }
                     return null;
                   },
@@ -114,7 +125,7 @@ class _CreateStudentPageState extends State<CreateStudentPage> {
                         style: ElevatedButton.styleFrom(
                           minimumSize: const Size(double.infinity, 50),
                         ),
-                        child: const Text('Öğrenciyi Kaydet'),
+                        child: const Text('Save Student'),
                       ),
               ],
             ),

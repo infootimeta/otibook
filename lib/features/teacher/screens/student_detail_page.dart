@@ -35,7 +35,7 @@ class _StudentDetailPageState extends State<StudentDetailPage> {
         return Scaffold(
           appBar: AppBar(title: Text(studentName)),
           body: StreamBuilder<List<SessionNoteModel>>(
-            stream: _firestoreService.getSessionNotes(widget.studentId),
+            stream: _firestoreService.streamSessionNotes(widget.studentId),
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return const Center(child: CircularProgressIndicator());

@@ -17,6 +17,12 @@ class _CreateProfilePageState extends State<CreateProfilePage> {
   String _selectedRole = 'teacher'; // Varsayılan rol
   bool _isLoading = false;
 
+  @override
+  void dispose() {
+    _nameController.dispose();
+    super.dispose();
+  }
+
   Future<void> _createProfile() async {
     if (_formKey.currentState!.validate()) {
       setState(() => _isLoading = true);
@@ -33,35 +39,26 @@ class _CreateProfilePageState extends State<CreateProfilePage> {
             role: _selectedRole,
           );
 
-          // AuthProvider'ı güncelleyip ana sayfaya yönlendir
-          if (context.mounted) {
-            final BuildContext currentContext = context;
+          if (!mounted) return;
 
-            await Provider.of<AuthProvider>(
-              currentContext,
-              listen: false,
-            ).refreshUserProfile();
+          await context.read<AuthProvider>().refreshUserProfile();
 
-            if (currentContext.mounted) {
-              currentContext.go('/');
-            }
-          }
+          if (!mounted) return;
+          context.go('/');
         } catch (e) {
-          // Hata yönetimi
-          if (context.mounted) {
-            final BuildContext currentContext = context;
-            ScaffoldMessenger.of(currentContext).showSnackBar(
-              SnackBar(
-                content: Text(
-                  'Profil oluşturulurken bir hata oluştu: ${e.toString()}',
-                ),
-              ),
-            );
-          }
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Profil oluşturulurken bir hata oluştu: $e')),
+          );
         } finally {
-          if (mounted) {
-            setState(() => _isLoading = false);
-          }
+          if (mounted) setState(() => _isLoading = false);
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Kullanıcı oturumu bulunamadı.')),
+          );
+          setState(() => _isLoading = false);
         }
       }
     }
@@ -69,6 +66,12 @@ class _CreateProfilePageState extends State<CreateProfilePage> {
 
   @override
   Widget build(BuildContext context) {
+    final roles = const [
+      DropdownMenuItem(value: 'teacher', child: Text('Öğretmen')),
+      DropdownMenuItem(value: 'parent', child: Text('Veli')),
+      DropdownMenuItem(value: 'admin', child: Text('Yönetici')),
+    ];
+
     return Scaffold(
       appBar: AppBar(title: const Text('Profil Oluştur')),
       body: Center(
@@ -82,8 +85,8 @@ class _CreateProfilePageState extends State<CreateProfilePage> {
                 Text(
                   'Hesabınızı Tamamlayın',
                   style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+                        fontWeight: FontWeight.bold,
+                      ),
                 ),
                 const SizedBox(height: 8),
                 Text(
@@ -106,21 +109,17 @@ class _CreateProfilePageState extends State<CreateProfilePage> {
                 ),
                 const SizedBox(height: 24),
                 DropdownButtonFormField<String>(
-                  initialValue: _selectedRole,
+                  value: _selectedRole, // <-- düzeltildi
                   decoration: const InputDecoration(
                     labelText: 'Rolünüz',
                     border: OutlineInputBorder(),
                   ),
-                  items: const [
-                    DropdownMenuItem(value: 'teacher', child: Text('Öğretmen')),
-                    DropdownMenuItem(value: 'parent', child: Text('Veli')),
-                    DropdownMenuItem(value: 'admin', child: Text('Yönetici')),
-                  ],
+                  items: roles,
+                  validator: (v) =>
+                      (v == null || v.isEmpty) ? 'Lütfen bir rol seçin.' : null,
                   onChanged: (value) {
                     if (value != null) {
-                      setState(() {
-                        _selectedRole = value;
-                      });
+                      setState(() => _selectedRole = value);
                     }
                   },
                 ),
@@ -128,12 +127,12 @@ class _CreateProfilePageState extends State<CreateProfilePage> {
                 _isLoading
                     ? const CircularProgressIndicator()
                     : ElevatedButton(
-                      onPressed: _createProfile,
-                      style: ElevatedButton.styleFrom(
-                        minimumSize: const Size(double.infinity, 50),
+                        onPressed: _createProfile,
+                        style: ElevatedButton.styleFrom(
+                          minimumSize: const Size(double.infinity, 50),
+                        ),
+                        child: const Text('Profili Kaydet ve Devam Et'),
                       ),
-                      child: const Text('Profili Kaydet ve Devam Et'),
-                    ),
               ],
             ),
           ),

@@ -1,43 +1,36 @@
+// lib/models/student_model.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class StudentModel {
   final String id;
   final String nameSurname;
-  final String qrCodeData;
-  final DocumentReference parentRef;
-  final List<DocumentReference> assignedTeacherRefs;
-  final Timestamp createdAt;
+  final List<DocumentReference<Map<String, dynamic>>> assignedTeacherRefs;
 
   StudentModel({
     required this.id,
     required this.nameSurname,
-    required this.qrCodeData,
-    required this.parentRef,
     required this.assignedTeacherRefs,
-    required this.createdAt,
   });
 
-  // Firestore dökümanından StudentModel objesi oluşturmak için
-  factory StudentModel.fromFirestore(DocumentSnapshot doc) {
-    Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+  factory StudentModel.fromDoc(DocumentSnapshot<Map<String, dynamic>> doc) {
+    final data = doc.data() ?? {};
+    final rawRefs = (data['assignedTeacherRefs'] as List?) ?? [];
+    final refs = rawRefs
+        .whereType<DocumentReference>()
+        .map((r) => r as DocumentReference<Map<String, dynamic>>)
+        .toList();
+
     return StudentModel(
       id: doc.id,
-      nameSurname: data['name_surname'] ?? '',
-      qrCodeData: data['qr_code_data'] ?? '',
-      parentRef: data['parent_ref'],
-      assignedTeacherRefs: List<DocumentReference>.from(data['assigned_teacher_refs'] ?? []),
-      createdAt: data['created_at'] ?? Timestamp.now(),
+      nameSurname: (data['nameSurname'] ?? '') as String,
+      assignedTeacherRefs: refs,
     );
   }
 
-  // StudentModel objesini Firestore'a yazmak için Map'e dönüştüren metot
   Map<String, dynamic> toMap() {
     return {
-      'name_surname': nameSurname,
-      'qr_code_data': qrCodeData,
-      'parent_ref': parentRef,
-      'assigned_teacher_refs': assignedTeacherRefs,
-      'created_at': createdAt,
+      'nameSurname': nameSurname,
+      'assignedTeacherRefs': assignedTeacherRefs,
     };
   }
 }
