@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+
 import 'package:otibook/core/services/firestore_service.dart';
 import 'package:otibook/features/auth/providers/auth_provider.dart';
 import 'package:otibook/features/teacher/screens/qr_scanner_page.dart';
@@ -17,56 +18,67 @@ class _TeacherHomePageState extends State<TeacherHomePage> {
   final FirestoreService _firestoreService = FirestoreService();
 
   Future<void> _scanQrCode() async {
-    // QR Tarayıcı sayfasını aç ve bir sonuç bekle.
-    final qrCodeResult = await Navigator.push<String?>(
-      context,
-      MaterialPageRoute(builder: (context) => const QRScannerPage()),
-    );
+    try {
+      // GoRouter kullanıyorsan context.push ile de açabilirsin.
+      // final qrCodeResult = await context.push<String?>('/scan'); // eğer route tanımlıysa
+      final qrCodeResult = await Navigator.push<String?>(
+        context,
+        MaterialPageRoute(builder: (_) => const QRScannerPage()),
+      );
 
-    if (qrCodeResult != null && qrCodeResult.isNotEmpty && mounted) {
-      // Dönen QR kod verisi ile öğrenciyi ara
+      if (!mounted || qrCodeResult == null || qrCodeResult.isEmpty) return;
+
       final student = await _firestoreService.getStudentByQrCode(qrCodeResult);
 
-      if (student != null && mounted) {
-        // Öğrenci bulunduysa detay sayfasına yönlendir
+      if (!mounted) return;
+
+      if (student != null) {
         context.go('/teacher_home/student/${student.id}');
-      } else if (mounted) {
-        // Öğrenci bulunamadıysa uyarı göster
+      } else {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Bu QR koda sahip bir öğrenci bulunamadı.'),
           ),
         );
       }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('QR okuma/arama hatası: $e')));
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final authProvider = Provider.of<AuthProvider>(context);
+    final authProvider = context.watch<AuthProvider>();
     final user = authProvider.user;
 
     if (user == null) {
-      // Eğer kullanıcı bilgisi henüz yüklenmediyse bekleme ekranı göster
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
+    final displayName = user.nameSurname.isNotEmpty == true
+        ? user.nameSurname
+        : 'Öğretmen';
+
     return Scaffold(
       appBar: AppBar(
-        title: Text('Hoş Geldin, ${user.nameSurname}'),
+        title: Text('Hoş Geldin, $displayName'),
         actions: [
           IconButton(
             icon: const Icon(Icons.logout),
-            onPressed: () {
-              context.read<AuthProvider>().signOut();
+            tooltip: 'Çıkış Yap',
+            onPressed: () async {
+              await context.read<AuthProvider>().signOut();
+              if (!mounted) return;
               context.go('/auth');
             },
-            tooltip: 'Çıkış Yap',
           ),
         ],
       ),
-      body: StreamBuilder<List<StudentModel>>(
-        stream: _firestoreService.getAssignedStudents(user.uid),
+      body: FutureBuilder<List<StudentModel>>(
+        future: _firestoreService.getAssignedStudents(user.uid),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
@@ -74,30 +86,45 @@ class _TeacherHomePageState extends State<TeacherHomePage> {
           if (snapshot.hasError) {
             return Center(child: Text('Bir hata oluştu: ${snapshot.error}'));
           }
-          if (!snapshot.hasData || snapshot.data!.isEmpty) {
-            return const Center(
+          final students = snapshot.data ?? const <StudentModel>[];
+          if (students.isEmpty) {
+            return Center(
               child: Padding(
-                padding: EdgeInsets.all(16.0),
-                child: Text(
-                  'Size atanmış bir öğrenci bulunmamaktadır. Lütfen yöneticinizle görüşün.',
-                  textAlign: TextAlign.center,
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text(
+                      'Size atanmış bir öğrenci bulunmamaktadır. Lütfen yöneticinizle görüşün.',
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 16),
+                    OutlinedButton.icon(
+                      onPressed: _scanQrCode,
+                      icon: const Icon(Icons.qr_code_scanner),
+                      label: const Text('QR Kod Okut'),
+                    ),
+                  ],
                 ),
               ),
             );
           }
 
-          final students = snapshot.data!;
-          return ListView.builder(
+          return ListView.separated(
             itemCount: students.length,
+            separatorBuilder: (_, __) => const Divider(height: 1),
             itemBuilder: (context, index) {
               final student = students[index];
               return ListTile(
                 leading: const Icon(Icons.person),
                 title: Text(student.nameSurname),
                 subtitle: Text('ID: ${student.id}'),
-                onTap: () {
-                  context.go('/teacher_home/student/${student.id}');
-                },
+                onTap: () => context.go('/teacher_home/student/${student.id}'),
+                trailing: IconButton(
+                  tooltip: 'QR ile bul',
+                  icon: const Icon(Icons.qr_code),
+                  onPressed: _scanQrCode,
+                ),
               );
             },
           );

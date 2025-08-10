@@ -37,30 +37,39 @@ class _NewNotePageState extends State<NewNotePage> {
             ),
             const SizedBox(height: 12),
             ElevatedButton(
-              onPressed: saving ? null : () async {
-                setState(() => saving = true);
-                try {
-                  final teacherId = context.read<AuthProvider>().user?.uid;
-                  if (teacherId == null) {
-                    throw Exception('Teacher ID not found.');
-                  }
-                  final note = SessionNoteModel(
-                    id: DateTime.now().millisecondsSinceEpoch.toString(),
-                    noteText: txt.text.trim(),
-                    studentRef: fs.getStudentDocRef(widget.studentId),
-                    teacherRef: fs.getUserDocumentRef(teacherId),
-                    createdAt: Timestamp.now(),
-                  );
-                  await fs.addSessionNote(widget.studentId, note);
-                  if (mounted) Navigator.pop(context, true);
-                } catch (e) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text(fs.getFirestoreErrorMessage(e))),
-                  );
-                } finally {
-                  if (mounted) setState(() => saving = false);
-                }
-              },
+              onPressed: saving
+                  ? null
+                  : () async {
+                      setState(() => saving = true);
+                      try {
+                        final teacherId = context
+                            .read<AuthProvider>()
+                            .user
+                            ?.uid;
+                        if (teacherId == null) {
+                          throw Exception('Teacher ID not found.');
+                        }
+                        final note = SessionNoteModel(
+                          id: DateTime.now().millisecondsSinceEpoch.toString(),
+                          noteText: txt.text.trim(),
+                          studentRef: fs.getStudentReference(widget.studentId),
+                          teacherRef: fs.getUserReference(teacherId),
+                          createdAt: Timestamp.now(),
+                        );
+                        await fs.addSessionNote(widget.studentId, note);
+                        // ignore: use_build_context_synchronously
+                        if (mounted) Navigator.pop(context, true);
+                      } catch (e) {
+                        // ignore: use_build_context_synchronously
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(fs.getFirestoreErrorMessage(e)),
+                          ),
+                        );
+                      } finally {
+                        if (mounted) setState(() => saving = false);
+                      }
+                    },
               child: Text(saving ? 'Kaydediliyor...' : 'Kaydet'),
             ),
           ],

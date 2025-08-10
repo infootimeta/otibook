@@ -33,4 +33,6 @@ class StudentModel {
       'assignedTeacherRefs': assignedTeacherRefs,
     };
   }
+
+  static fromJson(Map<String, dynamic> data) {}
 }

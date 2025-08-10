@@ -36,15 +36,13 @@ class _ParentHomePageState extends State<ParentHomePage> {
           .collection('users')
           .doc(user.uid);
 
-      final studentQuery =
-          await FirebaseFirestore.instance
-              .collection('students')
-              .where('parent_ref', isEqualTo: parentRef)
-              .limit(1)
-              .get();
-
+      final studentQuery = await FirebaseFirestore.instance
+          .collection('students')
+          .where('parent_ref', isEqualTo: parentRef)
+          .limit(1)
+          .get();
       if (studentQuery.docs.isNotEmpty) {
-        final student = StudentModel.fromFirestore(studentQuery.docs.first);
+        final student = StudentModel.fromJson(studentQuery.docs.first.data());
         if (mounted) {
           // Veli, öğretmen detay sayfasıyla aynı sayfayı kullanacak
           // Fakat sayfa içindeki yetkiler (örn. not ekleme butonu) rol'e göre gizlenebilir.
@@ -64,10 +62,8 @@ class _ParentHomePageState extends State<ParentHomePage> {
       if (mounted) {
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(
-            builder:
-                (_) => InfoScreen(
-                  message: 'Veriler alınırken bir hata oluştu: $e',
-                ),
+            builder: (_) =>
+                InfoScreen(message: 'Veriler alınırken bir hata oluştu: $e'),
           ),
         );
       }

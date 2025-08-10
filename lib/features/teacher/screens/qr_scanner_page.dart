@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
@@ -15,14 +16,18 @@ class _QRScannerPageState extends State<QRScannerPage> {
   @override
   void reassemble() {
     super.reassemble();
-    // hot-reload için güvenli yeniden başlat
-    _controller.stop();
-    _controller.start();
+    // Hot-reload’da Android’de stop, iOS’ta start önerilir.
+    if (Platform.isAndroid) {
+      _controller.stop();
+    } else if (Platform.isIOS) {
+      _controller.start();
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final scanArea = (MediaQuery.of(context).size.width < 400 ||
+    final scanArea =
+        (MediaQuery.of(context).size.width < 400 ||
             MediaQuery.of(context).size.height < 400)
         ? 250.0
         : 300.0;
@@ -33,19 +38,24 @@ class _QRScannerPageState extends State<QRScannerPage> {
         children: [
           MobileScanner(
             controller: _controller,
+            fit: BoxFit.cover,
             onDetect: (capture) async {
               if (_handled) return;
               final codes = capture.barcodes;
-              final value = codes.isNotEmpty ? (codes.first.rawValue ?? '') : '';
+              final value = codes.isNotEmpty
+                  ? (codes.first.rawValue ?? '')
+                  : '';
               if (value.isEmpty) return;
 
               _handled = true;
-              final navigator = Navigator.of(context); // context’i await öncesi al
+              final navigator = Navigator.of(context); // await öncesi referans
               await _controller.stop();
               if (!mounted) return;
               navigator.pop(value);
             },
           ),
+
+          // Üstte kapatma, torch ve kamera değiştir butonları
           Positioned(
             top: 40,
             left: 10,
@@ -55,11 +65,29 @@ class _QRScannerPageState extends State<QRScannerPage> {
             ),
           ),
           Positioned(
+            top: 40,
+            right: 10,
+            child: Row(
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.flash_on, color: Colors.white),
+                  onPressed: () => _controller.toggleTorch(),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.cameraswitch, color: Colors.white),
+                  onPressed: () => _controller.switchCamera(),
+                ),
+              ],
+            ),
+          ),
+
+          // Alt bilgilendirme
+          Positioned(
             bottom: 100,
             child: Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Colors.black.withAlpha(102),
+                color: Colors.black.withValues(alpha: 0.4),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: const Text(
@@ -68,10 +96,15 @@ class _QRScannerPageState extends State<QRScannerPage> {
               ),
             ),
           ),
+
+          // Delikli overlay (gerçek cut-out)
           IgnorePointer(
             child: _ScannerOverlay(
               cutOutSize: scanArea,
               borderColor: Theme.of(context).primaryColor,
+              borderWidth: 4,
+              borderRadius: 16, // ARTIK parametre var
+              overlayOpacity: 0.45,
             ),
           ),
         ],
@@ -91,37 +124,83 @@ class _ScannerOverlay extends StatelessWidget {
     required this.cutOutSize,
     this.borderColor = Colors.white,
     this.borderWidth = 4,
+    this.borderRadius = 12,
+    this.overlayOpacity = 0.45,
   });
 
   final double cutOutSize;
   final Color borderColor;
   final double borderWidth;
   final double borderRadius;
+  final double overlayOpacity;
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(builder: (context, c) {
-      final w = c.maxWidth;
-      final h = c.maxHeight;
-      final left = (w - cutOutSize) / 2;
-      final top = (h - cutOutSize) / 2;
+    return LayoutBuilder(
+      builder: (context, c) {
+        final w = c.maxWidth;
+        final h = c.maxHeight;
+        final left = (w - cutOutSize) / 2;
+        final top = (h - cutOutSize) / 2;
+        final rect = Rect.fromLTWH(left, top, cutOutSize, cutOutSize);
 
-      return Stack(children: [
-        Container(color: Colors.black45),
-        Positioned(
-          left: left,
-          top: top,
-          width: cutOutSize,
-          height: cutOutSize,
-          child: Container(
-            decoration: BoxDecoration(
-              color: Colors.transparent,
-              borderRadius: BorderRadius.circular(borderRadius),
-              border: Border.all(color: borderColor, width: borderWidth),
+        return CustomPaint(
+          size: Size(w, h),
+          painter: _CutOutPainter(
+            cutOutRect: RRect.fromRectAndRadius(
+              rect,
+              Radius.circular(borderRadius),
             ),
+            overlayOpacity: overlayOpacity,
+            borderColor: borderColor,
+            borderWidth: borderWidth,
           ),
-        ),
-      ]);
-    });
+        );
+      },
+    );
+  }
+}
+
+class _CutOutPainter extends CustomPainter {
+  _CutOutPainter({
+    required this.cutOutRect,
+    required this.overlayOpacity,
+    required this.borderColor,
+    required this.borderWidth,
+  });
+
+  final RRect cutOutRect;
+  final double overlayOpacity;
+  final Color borderColor;
+  final double borderWidth;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final overlayPaint = Paint()
+      ..color = Colors.black.withValues(alpha: overlayOpacity)
+      ..style = PaintingStyle.fill;
+
+    // Tüm ekranı boyayan path
+    final bgPath = Path()..addRect(Offset.zero & size);
+    // Delik path
+    final holePath = Path()..addRRect(cutOutRect);
+    // Delikli maske: bg - hole
+    final cutOut = Path.combine(PathOperation.difference, bgPath, holePath);
+    canvas.drawPath(cutOut, overlayPaint);
+
+    // Kenarlık
+    final borderPaint = Paint()
+      ..color = borderColor
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = borderWidth;
+    canvas.drawRRect(cutOutRect, borderPaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _CutOutPainter oldDelegate) {
+    return oldDelegate.cutOutRect != cutOutRect ||
+        oldDelegate.overlayOpacity != overlayOpacity ||
+        oldDelegate.borderColor != borderColor ||
+        oldDelegate.borderWidth != borderWidth;
   }
 }

@@ -6,9 +6,10 @@ import 'package:provider/provider.dart';
 import 'package:record/record.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:uuid/uuid.dart';
+
 import 'package:otibook/core/services/firestore_service.dart';
 import 'package:otibook/core/services/storage_service.dart';
-import 'package:uuid/uuid.dart';
 import 'package:otibook/models/session_note_model.dart';
 import 'package:otibook/features/auth/providers/auth_provider.dart';
 
@@ -24,6 +25,8 @@ class _AddNotePageState extends State<AddNotePage> {
   final _noteController = TextEditingController();
   final _firestoreService = FirestoreService();
   final _storageService = StorageService();
+
+  // record >= 5.x ile AudioRecorder sınıfı var. Eski sürümlerde Record() kullanılır.
   final _audioRecorder = AudioRecorder();
 
   bool _isLoading = false;
@@ -53,7 +56,8 @@ class _AddNotePageState extends State<AddNotePage> {
         });
       }
     } else {
-      if (await _audioRecorder.hasPermission()) {
+      final hasPerm = await _audioRecorder.hasPermission();
+      if (hasPerm) {
         final directory = await getApplicationDocumentsDirectory();
         final path =
             '${directory.path}/recording_${DateTime.now().millisecondsSinceEpoch}.m4a';
@@ -61,8 +65,13 @@ class _AddNotePageState extends State<AddNotePage> {
         await _audioRecorder.start(const RecordConfig(), path: path);
         setState(() {
           _isRecording = true;
-          _audioPath = null; // Önceki kaydı temizle
+          _audioPath = null; // önceki kaydı temizle
         });
+      } else {
+        if (!mounted) return;
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Mikrofon izni gerekli.')));
       }
     }
   }
@@ -85,8 +94,11 @@ class _AddNotePageState extends State<AddNotePage> {
 
     final teacherId = context.read<AuthProvider>().user?.uid;
     if (teacherId == null) {
-      // Hata yönetimi...
       setState(() => _isLoading = false);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Kullanıcı oturumu bulunamadı.')),
+      );
       return;
     }
 
@@ -107,30 +119,28 @@ class _AddNotePageState extends State<AddNotePage> {
         );
       }
 
-      await _firestoreService.addSessionNote(
-        widget.studentId,
-        SessionNoteModel(
-          id: const Uuid().v4(), // Generate a unique ID for the note
-          noteText: _noteController.text.trim(),
-          mediaUrl: imageUrl,
-          audioUrl: audioUrl,
-          createdAt: Timestamp.now(),
-          studentRef: _firestoreService.getStudentDocumentRef(widget.studentId),
-          teacherRef: _firestoreService.getUserDocRef(teacherId),
+      final note = SessionNoteModel(
+        id: const Uuid().v4(),
+        noteText: _noteController.text.trim(),
+        mediaUrl: imageUrl,
+        audioUrl: audioUrl,
+        createdAt: Timestamp.now(),
+        studentRef: _firestoreService.getStudentDocumentRef(widget.studentId),
+        teacherRef: _firestoreService.getTeacherDocumentRef(teacherId),
       );
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Not başarıyla kaydedildi!')),
-        );
-        context.pop();
-      }
+      await _firestoreService.addSessionNote(widget.studentId, note);
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Not başarıyla kaydedildi!')),
+      );
+      context.pop();
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Hata: $e')));
-      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Hata: $e')));
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -147,6 +157,8 @@ class _AddNotePageState extends State<AddNotePage> {
 
   @override
   Widget build(BuildContext context) {
+    final primary = Theme.of(context).primaryColor;
+
     return Scaffold(
       appBar: AppBar(title: const Text('Yeni Ders Notu Ekle')),
       body: SingleChildScrollView(
@@ -155,8 +167,11 @@ class _AddNotePageState extends State<AddNotePage> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             if (_imageFile != null)
-              Image.file(_imageFile!, height: 200, fit: BoxFit.cover),
-
+              ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: Image.file(_imageFile!, height: 200, fit: BoxFit.cover),
+              ),
+            const SizedBox(height: 12),
             TextField(
               controller: _noteController,
               decoration: const InputDecoration(
@@ -165,10 +180,10 @@ class _AddNotePageState extends State<AddNotePage> {
               ),
               maxLines: 5,
             ),
-            const SizedBox(height: 20),
-
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
+            const SizedBox(height: 16),
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
               children: [
                 ElevatedButton.icon(
                   onPressed: () => _pickImage(ImageSource.gallery),
@@ -182,15 +197,13 @@ class _AddNotePageState extends State<AddNotePage> {
                 ),
               ],
             ),
-            const SizedBox(height: 20),
-
+            const SizedBox(height: 16),
             ElevatedButton.icon(
               onPressed: _toggleRecording,
               icon: Icon(_isRecording ? Icons.stop : Icons.mic),
               label: Text(_isRecording ? 'Kaydı Durdur' : 'Ses Kaydı Başlat'),
               style: ElevatedButton.styleFrom(
-                backgroundColor:
-                    _isRecording ? Colors.red : Theme.of(context).primaryColor,
+                backgroundColor: _isRecording ? Colors.red : primary,
               ),
             ),
             if (_audioPath != null && !_isRecording)
@@ -202,20 +215,35 @@ class _AddNotePageState extends State<AddNotePage> {
                   style: TextStyle(color: Colors.green[700]),
                 ),
               ),
-
-            const SizedBox(height: 30),
+            const SizedBox(height: 24),
             _isLoading
                 ? const Center(child: CircularProgressIndicator())
                 : ElevatedButton(
-                  onPressed: _saveNote,
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    onPressed: _saveNote,
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                    ),
+                    child: const Text('Notu Kaydet'),
                   ),
-                  child: const Text('Notu Kaydet'),
-                ),
           ],
         ),
       ),
     );
+  }
+}
+
+/// FirestoreService için yardımcı referans getter'ları.
+/// İstersen doğrudan FirestoreService içine koy.
+extension FirestoreRefs on FirestoreService {
+  DocumentReference<Map<String, dynamic>> getStudentDocumentRef(
+    String studentId,
+  ) {
+    return FirebaseFirestore.instance.collection('students').doc(studentId);
+  }
+
+  DocumentReference<Map<String, dynamic>> getTeacherDocumentRef(
+    String teacherId,
+  ) {
+    return FirebaseFirestore.instance.collection('teachers').doc(teacherId);
   }
 }
