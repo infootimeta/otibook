@@ -8,7 +8,6 @@ class AdminDashboardPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-
     return Scaffold(
       appBar: AppBar(
         title: const Text('Yönetici Paneli'),
@@ -34,7 +33,6 @@ class AdminDashboardPage extends StatelessWidget {
             icon: Icons.person_add_alt_1,
             title: 'Yeni Kullanıcı Ekle',
             onTap: () {
-              // TODO: Yeni kullanıcı ekleme sayfasına yönlendir
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(content: Text('Bu özellik yakında eklenecek.')),
               );
@@ -61,7 +59,6 @@ class AdminDashboardPage extends StatelessWidget {
             icon: Icons.list_alt,
             title: 'Tüm Kullanıcılar',
             onTap: () {
-              // TODO: Kullanıcı listesi sayfasına yönlendir
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(content: Text('Bu özellik yakında eklenecek.')),
               );
@@ -72,7 +69,6 @@ class AdminDashboardPage extends StatelessWidget {
             icon: Icons.list,
             title: 'Tüm Öğrenciler',
             onTap: () {
-              // TODO: Öğrenci listesi sayfasına yönlendir
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(content: Text('Bu özellik yakında eklenecek.')),
               );
